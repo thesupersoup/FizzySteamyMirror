@@ -8,28 +8,27 @@
 using UnityEngine;
 using UnityEditor;
 using System.IO;
-
 // This copys various files into their required locations when Unity is launched to make installation a breeze.
 [InitializeOnLoad]
 public class RedistInstall {
 	static RedistInstall() {
-		CopyFile("Assets/Plugins/Steamworks.NET/redist", "steam_appid.txt", false);
+        //CopyFile("Assets/Plugins/Steamworks.NET/redist", "steam_appid.txt", false);
 
-		// We only need to copy the dll into the project root on <= Unity 5.0
+        // We only need to copy the dll into the project root on <= Unity 5.0
 #if UNITY_EDITOR_WIN && (UNITY_4_7 || UNITY_5_0)
-	#if UNITY_EDITOR_64
+#if UNITY_EDITOR_64
 		CopyFile("Assets/Plugins/x86_64", "steam_api64.dll", true);
-	#else
+#else
 		CopyFile("Assets/Plugins/x86", "steam_api.dll", true);
-	#endif
+#endif
 #endif
 
 #if UNITY_5 || UNITY_2017
-	#if !DISABLEPLATFORMSETTINGS
+#if !DISABLEPLATFORMSETTINGS
 		SetPlatformSettings();
-	#endif
 #endif
-	}
+#endif
+    }
 
 	static void CopyFile(string path, string filename, bool bCheckDifference) {
 		string strCWD = Directory.GetCurrentDirectory();
