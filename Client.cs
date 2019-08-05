@@ -22,7 +22,7 @@ namespace Mirror.FizzySteam
         public static int clientConnectTimeoutMS = 25000;
 
         private ConnectionState state = ConnectionState.DISCONNECTED;
-        private CSteamID hostSteamID = CSteamID.Nil;
+        private SteamId hostSteamID = new SteamId();
 
         public bool Connecting { get { return state == ConnectionState.CONNECTING; } private set { if( value ) state = ConnectionState.CONNECTING; } }
         public bool Connected {
@@ -52,7 +52,7 @@ namespace Mirror.FizzySteam
                         OnDisconnected?.Invoke();
                     }
 
-                    deinitialise();
+                    Deinitialize();
                 }
             }
         }
@@ -80,11 +80,11 @@ namespace Mirror.FizzySteam
             // We are connecting from now until Connect succeeds or fails
             Connecting = true;
 
-            initialise();
+            Initialize();
 
             try
             {
-                hostSteamID = new CSteamID(Convert.ToUInt64(host));
+                hostSteamID = Convert.ToUInt64(host);
 
                 InternalReceiveLoop();
 
@@ -150,7 +150,7 @@ namespace Mirror.FizzySteam
             Debug.Log("ReceiveLoop Start");
 
             uint readPacketSize;
-            CSteamID clientSteamID;
+            SteamId clientSteamID;
 
             try
             {
@@ -180,13 +180,13 @@ namespace Mirror.FizzySteam
             Debug.Log("ReceiveLoop Stop");
         }
 
-        protected override void OnNewConnectionInternal(P2PSessionRequest_t result)
+        protected override void OnNewConnectionInternal( SteamId id )
         {
             Debug.Log("OnNewConnectionInternal in client");
 
-            if (hostSteamID == result.m_steamIDRemote)
+            if ( hostSteamID == id )
             {
-                SteamNetworking.AcceptP2PSessionWithUser(result.m_steamIDRemote);
+                SteamNetworking.AcceptP2PSessionWithUser( id );
             } else
             {
                 Debug.LogError("");
@@ -199,7 +199,7 @@ namespace Mirror.FizzySteam
             Debug.Log("InternalReceiveLoop Start");
 
             uint readPacketSize;
-            CSteamID clientSteamID;
+            SteamId clientSteamID;
 
             try
             {

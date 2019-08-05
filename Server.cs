@@ -16,12 +16,12 @@ namespace Mirror.FizzySteam
             DISCONNECTING,
         }
 
-        public CSteamID steamID;
+        public SteamId steamID;
         public ConnectionState state;
         public int connectionID;
         public float timeIdle = 0;
 
-        public SteamClient(ConnectionState state, CSteamID steamID, int connectionID)
+        public SteamClient(ConnectionState state, SteamId steamID, int connectionID)
         {
             this.state = state;
             this.steamID = steamID;
@@ -32,7 +32,7 @@ namespace Mirror.FizzySteam
 
     internal class SteamConnectionMap : IEnumerable<KeyValuePair<int, SteamClient>>
     {
-        public readonly Dictionary<CSteamID, SteamClient> fromSteamID = new Dictionary<CSteamID, SteamClient>();
+        public readonly Dictionary<SteamId, SteamClient> fromSteamID = new Dictionary<SteamId, SteamClient>();
         public readonly Dictionary<int, SteamClient> fromConnectionID = new Dictionary<int, SteamClient>();
 
         public SteamConnectionMap()
@@ -44,7 +44,7 @@ namespace Mirror.FizzySteam
             get { return fromSteamID.Count; }
         }
 
-        public SteamClient Add(CSteamID steamID, int connectionID, SteamClient.ConnectionState state)
+        public SteamClient Add( SteamId steamID, int connectionID, SteamClient.ConnectionState state )
         {
             var newClient = new SteamClient(state, steamID, connectionID);
             fromSteamID.Add(steamID, newClient);
@@ -53,7 +53,7 @@ namespace Mirror.FizzySteam
             return newClient;
         }
 
-        public void Remove(SteamClient steamClient)
+        public void Remove( SteamClient steamClient )
         {
             fromSteamID.Remove(steamClient.steamID);
             fromConnectionID.Remove(steamClient.connectionID);
@@ -99,7 +99,7 @@ namespace Mirror.FizzySteam
                 {
                     state = ConnectionState.OFFLINE;
 
-                    deinitialise();
+                    Deinitialize();
                 }
             }
         }
@@ -107,9 +107,9 @@ namespace Mirror.FizzySteam
         public async void Listen(int maxConnections = int.MaxValue)
         {
             Debug.Log("Listen Start");
-            //todo check we are not already listening ?
+			//todo check we are not already listening ?
 
-            initialise();
+			Initialize();
             Listening = true;
             this.maxConnections = maxConnections;
 
@@ -120,11 +120,11 @@ namespace Mirror.FizzySteam
             Debug.Log("Listen Stop");
         }
 
-        protected override void OnNewConnectionInternal(P2PSessionRequest_t result)
+        protected override void OnNewConnectionInternal( SteamId id )
         {
             Debug.Log("OnNewConnectionInternal in server");
 
-            SteamNetworking.AcceptP2PSessionWithUser(result.m_steamIDRemote);
+            SteamNetworking.AcceptP2PSessionWithUser( id );
         }
 
 
@@ -134,7 +134,7 @@ namespace Mirror.FizzySteam
             Debug.Log("InternalReceiveLoop Start");
 
             uint readPacketSize;
-            CSteamID clientSteamID;
+            SteamId clientSteamID;
 
             try
             {
@@ -199,7 +199,7 @@ namespace Mirror.FizzySteam
             Debug.Log("ReceiveLoop Start");
 
             uint readPacketSize;
-            CSteamID clientSteamID;
+            SteamId clientSteamID;
 
             try
             {
@@ -246,7 +246,7 @@ namespace Mirror.FizzySteam
 
             Offline = true;
 
-            deinitialise();
+            Deinitialize();
             Debug.Log("Server Stop Finished");
         }
 
@@ -318,9 +318,9 @@ namespace Mirror.FizzySteam
             return null;
         }
 
-        protected override void initialise()
+        protected override void Initialize()
         {
-            base.initialise();
+            base.Initialize();
 
             nextConnectionID = 1;
             steamConnectionMap = new SteamConnectionMap();

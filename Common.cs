@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using System;
 using Steamworks;
+using Steamworks.Data;
 
 namespace Mirror.FizzySteam
 {
@@ -23,35 +24,26 @@ namespace Mirror.FizzySteam
         public static float secondsBetweenPolls = 0.03333f;
 
         //this is a callback from steam that gets registered and called when the server receives new connections
-        private Callback<P2PSessionRequest_t> callback_OnNewConnection = null;
+        // private Callback<P2PSessionRequest_t> callback_OnNewConnection = null;
         //this is a callback from steam that gets registered and called when the ClientConnect fails
-        private Callback<P2PSessionConnectFail_t> callback_OnConnectFail = null;
+        // private Callback<P2PSessionConnectFail_t> callback_OnConnectFail = null;
 
         readonly static protected byte[] connectMsgBuffer = new byte[] { (byte)InternalMessages.CONNECT };
         readonly static protected byte[] acceptConnectMsgBuffer = new byte[] { (byte)InternalMessages.ACCEPT_CONNECT };
         readonly static protected byte[] disconnectMsgBuffer = new byte[] { (byte)InternalMessages.DISCONNECT };
-        public static EP2PSend[] channels;
+        public static P2PSend[] channels;
+		P2Packet? packet = null;
 
         readonly static protected uint maxPacketSize = 1048576;
         readonly protected byte[] receiveBufferInternal = new byte[1];
 
-        protected void deinitialise()
+        protected void Deinitialize()
         {
-            if (callback_OnNewConnection == null)
-            {
-                callback_OnNewConnection.Dispose();
-                callback_OnNewConnection = null;
-            }
+			SteamNetworking.OnP2PSessionRequest -= OnNewConnection;
+			SteamNetworking.OnP2PConnectionFailed -= OnConnectFail;
+		}
 
-            if (callback_OnConnectFail == null)
-            {
-                callback_OnConnectFail.Dispose();
-                callback_OnConnectFail = null;
-            }
-
-        }
-
-        protected virtual void initialise()
+        protected virtual void Initialize()
         {
             Debug.Log("initialise");
             /*
@@ -65,9 +57,12 @@ namespace Mirror.FizzySteam
             serverReceiveBufferPending = null;
             */
 
-            if (SteamManager.Initialized)
+            if ( Steamworks.SteamClient.IsValid )
             {
-                if (callback_OnNewConnection == null)
+				SteamNetworking.OnP2PSessionRequest += OnNewConnection;
+				SteamNetworking.OnP2PConnectionFailed += OnConnectFail;
+
+				/*if (callback_OnNewConnection == null)
                 {
                     Debug.Log("initialise callback 1");
                     callback_OnNewConnection = Callback<P2PSessionRequest_t>.Create(OnNewConnection);
@@ -77,7 +72,7 @@ namespace Mirror.FizzySteam
                     Debug.Log("initialise callback 2");
 
                     callback_OnConnectFail = Callback<P2PSessionConnectFail_t>.Create(OnConnectFail);
-                }
+                }*/
             }
             else
             {
@@ -86,89 +81,109 @@ namespace Mirror.FizzySteam
             }
         }
 
-        protected void OnNewConnection(P2PSessionRequest_t result)
+        protected void OnNewConnection( SteamId id )
         {
             Debug.Log("OnNewConnection");
-            OnNewConnectionInternal(result);
+            OnNewConnectionInternal( id );
         }
 
-        protected virtual void OnNewConnectionInternal(P2PSessionRequest_t result) { Debug.Log("OnNewConnectionInternal"); }
+        protected virtual void OnNewConnectionInternal( SteamId id ) { Debug.Log("OnNewConnectionInternal"); }
 
-        protected virtual void OnConnectFail(P2PSessionConnectFail_t result)
+        protected virtual void OnConnectFail( SteamId id, P2PSessionError error )
         {
-            Debug.Log("OnConnectFail " + result);
+            Debug.Log("OnConnectFail " + id + " " + error );
             throw new Exception("Failed to connect");
         }
 
-        protected void SendInternal(CSteamID host, byte[] msgBuffer)
+        protected void SendInternal( SteamId host, byte[] msgBuffer )
         {
-            if (!SteamManager.Initialized)
+            if ( !Steamworks.SteamClient.IsValid )
             {
                 throw new ObjectDisposedException("Steamworks");
             }
-            SteamNetworking.SendP2PPacket(host, msgBuffer, (uint)msgBuffer.Length, EP2PSend.k_EP2PSendReliable, (int)SteamChannels.SEND_INTERNAL);
+            SteamNetworking.SendP2PPacket(host, msgBuffer, msgBuffer.Length, (int)SteamChannels.SEND_INTERNAL, P2PSend.Reliable);
         }
 
-        protected bool ReceiveInternal(out uint readPacketSize, out CSteamID clientSteamID)
+        protected bool ReceiveInternal(out uint readPacketSize, out SteamId clientSteamID)
         {
-            if (!SteamManager.Initialized)
+			readPacketSize = 0;
+			clientSteamID = new SteamId();
+
+            if ( !Steamworks.SteamClient.IsValid )
             {
                 throw new ObjectDisposedException("Steamworks");
             }
-            return SteamNetworking.ReadP2PPacket(receiveBufferInternal, 1, out readPacketSize, out clientSteamID, (int)SteamChannels.SEND_INTERNAL);
+
+			packet = SteamNetworking.ReadP2PPacket((int)SteamChannels.SEND_INTERNAL);
+
+			if( packet != null )
+			{
+				readPacketSize = (uint)packet.Value.Data.Length;
+				clientSteamID = packet.Value.SteamId;
+			}
+
+			return packet != null;
         }
 
-        protected void Send(CSteamID host, byte[] msgBuffer, EP2PSend sendType, int channel)
+        protected void Send( SteamId host, byte[] msgBuffer, P2PSend sendType, int channel)
         {
-            if (!SteamManager.Initialized)
+            if ( !Steamworks.SteamClient.IsValid )
             {
                 throw new ObjectDisposedException("Steamworks");
             }
             if (channel >= channels.Length) {
                 channel = 0;
             }
-            SteamNetworking.SendP2PPacket(host, msgBuffer, (uint)msgBuffer.Length, sendType, channel);
+            SteamNetworking.SendP2PPacket(host, msgBuffer, msgBuffer.Length, channel, sendType );
         }
 
-        protected bool Receive(out uint readPacketSize, out CSteamID clientSteamID, out byte[] receiveBuffer, int channel)
+        protected bool Receive(out uint readPacketSize, out SteamId clientSteamID, out byte[] receiveBuffer, int channel)
         {
-            if (!SteamManager.Initialized)
-            {
+			readPacketSize = 0;
+			clientSteamID = new SteamId();
+			receiveBuffer = null;
+
+            if ( !Steamworks.SteamClient.IsValid )
+			{
                 throw new ObjectDisposedException("Steamworks");
             }
 
-            uint packetSize;
-            if (SteamNetworking.IsP2PPacketAvailable(out packetSize, channel) && packetSize > 0)
+            if ( SteamNetworking.IsP2PPacketAvailable( channel ) )
             {
-                receiveBuffer = new byte[packetSize];
-                return SteamNetworking.ReadP2PPacket(receiveBuffer, packetSize, out readPacketSize, out clientSteamID, channel);
+				packet = SteamNetworking.ReadP2PPacket( channel );
+
+				if( packet != null )
+				{
+					readPacketSize = (uint)packet.Value.Data.Length;
+					clientSteamID = packet.Value.SteamId;
+					receiveBuffer = packet.Value.Data;
+				}
+
+                return packet != null;
             }
 
-            receiveBuffer = null;
-            readPacketSize = 0;
-            clientSteamID = CSteamID.Nil;
             return false;
         }
 
-        protected void CloseP2PSessionWithUser(CSteamID clientSteamID)
+        protected void CloseP2PSessionWithUser( SteamId clientSteamID )
         {
-            if (!SteamManager.Initialized)
+            if ( !Steamworks.SteamClient.IsValid )
             {
                 throw new ObjectDisposedException("Steamworks");
             }
-            SteamNetworking.CloseP2PSessionWithUser(clientSteamID);
+            SteamNetworking.CloseP2PSessionWithUser( clientSteamID );
         }
 
-        public uint GetMaxPacketSize(EP2PSend sendType)
+        public uint GetMaxPacketSize( P2PSend sendType )
         {
             switch (sendType)
             {
-                case EP2PSend.k_EP2PSendUnreliable:
-                case EP2PSend.k_EP2PSendUnreliableNoDelay:
+                case P2PSend.Unreliable:
+                case P2PSend.UnreliableNoDelay:
                     return 1200; //UDP like - MTU size.
 
-                case EP2PSend.k_EP2PSendReliable:
-                case EP2PSend.k_EP2PSendReliableWithBuffering:
+                case P2PSend.Reliable:
+                case P2PSend.ReliableWithBuffering:
                     return maxPacketSize; //Reliable message send. Can send up to 1MB of data in a single message.
 
                 default:
@@ -178,11 +193,11 @@ namespace Mirror.FizzySteam
 
         }
 
-        protected EP2PSend channelToSendType(int channelId)
+        protected P2PSend channelToSendType(int channelId)
         {
             if (channelId >= channels.Length) {
                 Debug.LogError("Unknown channel id, please set it up in the component, will now send reliably");
-                return EP2PSend.k_EP2PSendReliable;
+                return P2PSend.Reliable;
             }
             return channels[channelId];
         }
